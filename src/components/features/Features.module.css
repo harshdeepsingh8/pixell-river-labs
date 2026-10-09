@@ -1,0 +1,33 @@
+.employees {
+    list-style: none;
+}
+
+.error {
+    color: darkred;
+}
+
+.input {
+    padding: 1em;
+    border: 2px solid darkgray;
+    border-radius: 5px;
+    background-color: lightsteelblue;
+
+    & div {
+      margin-bottom: 1em;
+    }
+}
+
+.roleName {
+    font-weight: bold;
+    margin-right: 2rem;
+}
+
+.table {
+    & td {
+        padding: 0.25rem;
+    }
+
+    & tr:nth-child(even) {
+        background-color: lightgray;
+    }
+}
