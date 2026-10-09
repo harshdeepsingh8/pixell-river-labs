@@ -1,145 +1,213 @@
 import { useState } from "react";
-import { departmentData } from "../../../data/departments";
+import { useFormInput } from "../../../hooks/useFormInput";
+import { employeeService } from "../../../services/employeeService";
+import { employeeRepo } from "../../../apis/employeeRepo";
 import styles from "../Features.module.css";
-import { Guid } from "guid-typescript";
 
+/**
+ * Displays employees and the employee creation form.
+ *
+ * useFormInput manages each input's value and messages.
+ * employeeService validates business rules and creates employees.
+ * employeeRepo supplies department and employee data.
+ *
+ * Component state holds the displayed list, while the repository
+ * owns the temporary data shared across the application.
+ */
 export function Employees() {
-    const [firstNameValue, setFirstNameValue] = useState("");
-    const [lastNameValue, setLastNameValue] = useState("");
-    const [formMessages, setFormMessages] = useState<string[]>([])
-    const [departmentInput, setDepartmentInput] = useState("");
-    const [departmentList, setDepartmentList] = useState(departmentData);
+  const firstName = useFormInput();
+  const lastName = useFormInput();
+  const department = useFormInput();
 
-    const departmentListElement = departmentList.map((d) => {
-        return <section key={d.id}>
-            <h2>{d.name}</h2>
-            <ul className={styles.employees}>
-                {d.employees.map((e) => <li key={e.id}>
-                    {e.firstName} {e.lastName}
-                </li>)}
-            </ul>
-        </section>
+  const [departmentList, setDepartmentList] = useState(() =>
+    employeeRepo.getDepartments()
+  );
+
+  const [successMessage, setSuccessMessage] = useState("");
+
+  function handleEmployeeSubmit() {
+    setSuccessMessage("");
+
+    const input = {
+      firstName: firstName.value,
+      lastName: lastName.value,
+      departmentId: department.value,
+    };
+
+    // Each hook runs a callback and displays the service's errors.
+    const firstNameValid = firstName.validate((value) => {
+      return employeeService.validateEmployee({
+        ...input,
+        firstName: value,
+      }).errors.firstName;
     });
 
-    const departmentDropdownInput = (
-            <select
-                value={departmentInput}
-                onChange={e => setDepartmentInput(e.target.value)}
-            >
-                <option value="">-- Select Department --</option>
-                {
-                    departmentData.map(d => {
-                        return(
-                            <option 
-                                key={"opt" + d.id} 
-                                value={d.name}>
-                                    {d.name}
-                                </option>
-                        );
-                    })
-                }
-            </select>
-    );
+    const lastNameValid = lastName.validate((value) => {
+      return employeeService.validateEmployee({
+        ...input,
+        lastName: value,
+      }).errors.lastName;
+    });
 
-    const handleEmployeeSubmit = () => {
-        let isValid = true;
-        setFormMessages([]);
+    const departmentValid = department.validate((value) => {
+      return employeeService.validateEmployee({
+        ...input,
+        departmentId: value,
+      }).errors.departmentId;
+    });
 
-        if(firstNameValue.trim().length < 3) {
-            isValid = false;
-            setFormMessages(s => {
-                return [...s, "First names must have at least three characters."]
-            });
-        }
-
-        if(!departmentData.find(d => d.name === departmentInput)) {
-            isValid = false;
-
-            setFormMessages(s => {
-                return [...s, "Employee must be in an existing department."]
-            })
-        }
-
-        if(isValid) {
-            setFirstNameValue("");
-            setLastNameValue("");
-
-            setDepartmentList(oldState => oldState.map(d => {
-                if(d.name !== departmentInput) {
-                    return d;
-                } else {
-                    // must create a deep clone of the department object being updated
-                    return {
-                        id: d.id,
-                        name: d.name,
-                        employees: [...d.employees,
-                            {
-                                id: Guid.create().toString(),
-                                firstName: firstNameValue,
-                                lastName: lastNameValue
-                            }
-
-                        ]
-                    };
-                }
-            }));
-        }
+    if (!firstNameValid || !lastNameValid || !departmentValid) {
+      return;
     }
 
-    return(<>
-        <section>
-            <h1>Employees by Department</h1>
-            {departmentListElement}
-        </section>
-        <section className={styles.input}>
-            <h2>Add New Employee</h2>
-            <form onSubmit={e => {
-                e.preventDefault();
-                handleEmployeeSubmit();
-                }
-            }>
-                <div>
-                    <label>
-                        First Name: <input 
-                            name="firstName" 
-                            type="text" 
-                            value = {firstNameValue}
-                            onChange={e => setFirstNameValue(e.target.value)}
-                        /> 
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Last Name: <input 
-                            name="lastName" 
-                            type="text" 
-                            value = {lastNameValue}
-                            onChange={e => setLastNameValue(e.target.value)}
-                            />
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Department: 
-                            {departmentDropdownInput}
-                    </label>
-                </div>
-                <div>
-                    {
-                        formMessages.map(message => {
-                            return <p 
-                                className={styles.error}
-                                >
-                                    {message}
-                                </p>    
-                            }
-                        )
-                    }
-                </div>
-                <div>
-                    <input type="submit" />
-                </div>
-            </form>
-        </section>
-    </>);
+    // The service validates again before storing the employee.
+    const result = employeeService.createEmployee(input);
+
+    if (!result.success) {
+      firstName.setMessages(
+        result.errors.firstName ? [result.errors.firstName] : []
+      );
+
+      lastName.setMessages(
+        result.errors.lastName ? [result.errors.lastName] : []
+      );
+
+      department.setMessages(
+        result.errors.departmentId ? [result.errors.departmentId] : []
+      );
+
+      return;
+    }
+
+    // Refresh the displayed data from the repository.
+    setDepartmentList(employeeRepo.getDepartments());
+
+    setSuccessMessage(
+      `${result.employee.firstName} was added successfully.`
+    );
+
+    firstName.reset();
+    lastName.reset();
+    department.reset();
+  }
+
+  return (
+    <>
+      <section>
+        <h1>Employees by Department</h1>
+
+        {departmentList.map((item) => (
+          <section key={item.id}>
+            <h2>{item.name}</h2>
+
+            <ul className={styles.employees}>
+              {item.employees.map((employee) => (
+                <li key={employee.id}>
+                  {employee.firstName} {employee.lastName}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </section>
+
+      <section className={styles.input}>
+        <h2>Add New Employee</h2>
+
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleEmployeeSubmit();
+          }}
+        >
+          <div>
+            <label htmlFor="firstName">First Name: </label>
+
+            <input
+              id="firstName"
+              name="firstName"
+              type="text"
+              value={firstName.value}
+              onChange={(event) => {
+                firstName.setValue(event.target.value);
+                setSuccessMessage("");
+              }}
+              aria-invalid={firstName.messages.length > 0}
+              aria-describedby="firstName-errors"
+            />
+
+            <div id="firstName-errors" aria-live="polite">
+              {firstName.messages.map((message) => (
+                <p key={message} className={styles.error}>
+                  {message}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="lastName">Last Name: </label>
+
+            <input
+              id="lastName"
+              name="lastName"
+              type="text"
+              value={lastName.value}
+              onChange={(event) => {
+                lastName.setValue(event.target.value);
+                setSuccessMessage("");
+              }}
+              aria-invalid={lastName.messages.length > 0}
+              aria-describedby="lastName-errors"
+            />
+
+            <div id="lastName-errors" aria-live="polite">
+              {lastName.messages.map((message) => (
+                <p key={message} className={styles.error}>
+                  {message}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="department">Department: </label>
+
+            <select
+              id="department"
+              name="department"
+              value={department.value}
+              onChange={(event) => {
+                department.setValue(event.target.value);
+                setSuccessMessage("");
+              }}
+              aria-invalid={department.messages.length > 0}
+              aria-describedby="department-errors"
+            >
+              <option value="">-- Select Department --</option>
+
+              {departmentList.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+
+            <div id="department-errors" aria-live="polite">
+              {department.messages.map((message) => (
+                <p key={message} className={styles.error}>
+                  {message}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit">Add Employee</button>
+
+          <p role="status">{successMessage}</p>
+        </form>
+      </section>
+    </>
+  );
 }
