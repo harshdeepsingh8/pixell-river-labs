@@ -1,33 +1,46 @@
-import { employeeRepo } from "../../../apis/employeeRepo";
+import { useState } from "react";
+import { getRoles } from "../../../repositories/organizationRepo";
+import { AddRole } from "./AddRole";
 import styles from "../Features.module.css";
 
-/**
- * Displays leadership roles and their employee details.
- * Data is retrieved through employeeRepo so this component
- * does not directly access the underlying test data.
- */
 export function Organization() {
-  const roles = employeeRepo.getRoles();
+  const [roles, setRoles] = useState(getRoles);
+
+  function refreshRoles() {
+    setRoles(getRoles());
+  }
 
   return (
-    <section>
-      <h1>Leadership and Management</h1>
+    <>
+      <section>
+        <h1>Leadership and Management</h1>
 
-      <table className={styles.table}>
-        <tbody>
-          {roles.map((role) => (
-            <tr key={role.id}>
-              <td className={styles.roleName}>
-                {role.title}
-              </td>
-
-              <td>
-                {role.employee?.firstName} {role.employee?.lastName}
-              </td>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th scope="col">Role</th>
+              <th scope="col">Employee</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+          </thead>
+
+          <tbody>
+            {roles.map((role) => (
+              <tr key={role.id}>
+                <td className={styles.roleName}>{role.title}</td>
+                <td>
+                  {role.employee
+                    ? `${role.employee.firstName} ${
+                        role.employee.lastName ?? ""
+                      }`.trim()
+                    : "Vacant"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <AddRole onCreated={refreshRoles} />
+    </>
   );
 }
