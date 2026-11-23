@@ -4,15 +4,15 @@ import { getRoles } from "../repositories/organizationRepo";
 import { createEmployee } from "../services/employeeService";
 import { createOrganizationPerson } from "../services/organizationService";
 
-export function listDepartments(_req: Request, res: Response) {
-  res.json(getDepartments());
+export async function listDepartments(_req: Request, res: Response) {
+  res.json(await getDepartments());
 }
 
-export function listRoles(_req: Request, res: Response) {
-  res.json(getRoles());
+export async function listRoles(_req: Request, res: Response) {
+  res.json(await getRoles());
 }
 
-export function addEmployee(req: Request, res: Response) {
+export async function addEmployee(req: Request, res: Response) {
   const { firstName, lastName = "", departmentId } = req.body ?? {};
 
   if (
@@ -27,11 +27,11 @@ export function addEmployee(req: Request, res: Response) {
     return;
   }
 
-  const result = createEmployee({ firstName, lastName, departmentId });
+  const result = await createEmployee({ firstName, lastName, departmentId });
   res.status(result.success ? 201 : 400).json(result);
 }
 
-export function addOrganizationPerson(req: Request, res: Response) {
+export async function addOrganizationPerson(req: Request, res: Response) {
   const { firstName, lastName = "", role } = req.body ?? {};
 
   if (
@@ -46,6 +46,6 @@ export function addOrganizationPerson(req: Request, res: Response) {
     return;
   }
 
-  const result = createOrganizationPerson({ firstName, lastName, role });
+  const result = await createOrganizationPerson({ firstName, lastName, role });
   res.status(result.success ? 200 : 400).json(result);
 }

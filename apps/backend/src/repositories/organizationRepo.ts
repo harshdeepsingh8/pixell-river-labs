@@ -1,52 +1,50 @@
-import { Guid } from "guid-typescript";
-import { roleData } from "../data/roles";
-import type { Role } from "../types/role";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db";
 
-let roles: Role[] = structuredClone(roleData);
-
-export function getRoles(): Role[] {
-  return structuredClone(roles);
+export function getRoles() {
+  return prisma.role.findMany({
+    orderBy: { title: "asc" },
+    include: { employee: true },
+  });
 }
 
-export function getRoleById(id: string): Role | undefined {
-  const role = roles.find((item) => item.id === id);
-  return role ? structuredClone(role) : undefined;
+function normalizeTitle(title: string) {
+  return title.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function createRole(input: Omit<Role, "id">): Role {
-  const role: Role = {
-    ...structuredClone(input),
-    id: Guid.create().toString(),
-  };
+export function assignPersonToRole(
+  title: string,
+  employee: { firstName: string; lastName?: string },
+) {
+  return prisma.$transaction(async (db) => {
+    const roles = await db.role.findMany({
+      orderBy: { id: "asc" },
+      select: { id: true, title: true, employeeId: true },
+    });
 
-  roles = [...roles, role];
-  return structuredClone(role);
-}
+    const matching = roles.filter(
+      (role) => normalizeTitle(role.title) === normalizeTitle(title),
+    );
 
-export function updateRole(
-  id: string,
-  changes: Partial<Omit<Role, "id">>,
-): Role | undefined {
-  const existing = roles.find((role) => role.id === id);
+    if (matching.some((role) => role.employeeId !== null)) {
+      return null;
+    }
 
-  if (!existing) {
-    return undefined;
-  }
+    const vacant = matching[0];
 
-  const updated: Role = {
-    ...existing,
-    ...structuredClone(changes),
-  };
+    if (vacant) {
+      return db.role.update({
+        where: { id: vacant.id },
+        data: { employee: { create: employee } },
+        include: { employee: true },
+      });
+    }
 
-  roles = roles.map((role) => (role.id === id ? updated : role));
-
-  return structuredClone(updated);
-}
-
-export function deleteRole(id: string): boolean {
-  const exists = roles.some((role) => role.id === id);
-
-  roles = roles.filter((role) => role.id !== id);
-
-  return exists;
+    return db.role.create({
+      data: { title, employee: { create: employee } },
+      include: { employee: true },
+    });
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 }

@@ -1,9 +1,11 @@
-﻿import express from "express";
+﻿import "dotenv/config";
+import express from "express";
 import cors from "cors";
 import { directoryRoutes } from "./routes/directoryRoutes";
 
 const app = express();
-const frontendOrigin = "http://localhost:5173";
+const frontendOrigin =
+  process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
 
 app.use((req, res, next) => {
   const origin = req.get("Origin");
@@ -20,6 +22,10 @@ app.use(cors({ origin: frontendOrigin }));
 app.use(express.json());
 app.use("/api", directoryRoutes);
 
-app.listen(3001, "127.0.0.1", () => {
-  console.log("API running at http://127.0.0.1:3001");
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(3001, "127.0.0.1", () => {
+    console.log("API running at http://127.0.0.1:3001");
+  });
+}
