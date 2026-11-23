@@ -1,11 +1,6 @@
-import { Guid } from "guid-typescript";
-import {
-  createRole,
-  getRoles,
-  updateRole,
-} from "../repositories/organizationRepo";
+import { Prisma } from "@prisma/client";
+import { assignPersonToRole } from "../repositories/organizationRepo";
 import type { FormErrors, FormResult } from "../types/form";
-import type { Role } from "../types/role";
 
 export interface OrganizationInput {
   firstName: string;
@@ -13,74 +8,52 @@ export interface OrganizationInput {
   role: string;
 }
 
-function normalizeRole(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
+type SavedRole = NonNullable<Awaited<ReturnType<typeof assignPersonToRole>>>;
 
-export function validateOrganization(
+export async function createOrganizationPerson(
   values: OrganizationInput,
-): FormErrors {
+): Promise<FormResult<SavedRole>> {
   const errors: FormErrors = {};
+  const firstName = values.firstName.trim();
+  const title = values.role.trim().replace(/\s+/g, " ");
 
-  if (values.firstName.trim().length < 3) {
+  if (firstName.length < 3) {
     errors.firstName = "First name must contain at least 3 characters.";
   }
 
-  if (!values.role.trim()) {
+  if (!title) {
     errors.role = "Enter a role.";
-  } else {
-    const occupied = getRoles().some(
-      (item) =>
-        normalizeRole(item.title) === normalizeRole(values.role) &&
-        item.employee !== undefined,
-    );
-
-    if (occupied) {
-      errors.role = "This role already exists and is occupied.";
-    }
   }
-
-  return errors;
-}
-
-export function createOrganizationPerson(
-  values: OrganizationInput,
-): FormResult<Role> {
-  const errors = validateOrganization(values);
 
   if (Object.keys(errors).length > 0) {
     return { success: false, errors };
   }
 
-  const employee = {
-    id: Guid.create().toString(),
-    firstName: values.firstName.trim(),
-    lastName: values.lastName.trim(),
-  };
+  try {
+    const role = await assignPersonToRole(title, {
+      firstName,
+      lastName: values.lastName.trim() || undefined,
+    });
 
-  const vacantRole = getRoles().find(
-    (item) =>
-      normalizeRole(item.title) === normalizeRole(values.role) &&
-      item.employee === undefined,
-  );
-
-  if (vacantRole) {
-    const updated = updateRole(vacantRole.id, { employee });
-
-    if (!updated) {
+    if (!role) {
       return {
         success: false,
-        errors: { role: "Role no longer exists. Please try again." },
+        errors: { role: "This role already exists and is occupied." },
       };
     }
 
-    return { success: true, data: updated };
+    return { success: true, data: role };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      return {
+        success: false,
+        errors: { role: "The role changed during submission. Please try again." },
+      };
+    }
+
+    throw error;
   }
-
-  const created = createRole({
-    title: values.role.trim().replace(/\s+/g, " "),
-    employee,
-  });
-
-  return { success: true, data: created };
 }

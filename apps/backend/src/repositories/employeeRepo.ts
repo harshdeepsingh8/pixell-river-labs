@@ -1,39 +1,25 @@
-import { Guid } from "guid-typescript";
-import { departmentData } from "../data/departments";
-import type { Department } from "../types/department";
+import { prisma } from "../db";
 import type { Employee } from "../types/employee";
 
-let departments: Department[] = structuredClone(departmentData);
+export function getDepartments() {
+  return prisma.department.findMany({
+    orderBy: { name: "asc" },
+    include: { employees: { orderBy: { firstName: "asc" } } },
+  });
+}
 
-export function getDepartments(): Department[] {
-  return structuredClone(departments);
+export function departmentExists(id: string) {
+  return prisma.department.findUnique({
+    where: { id },
+    select: { id: true },
+  });
 }
 
 export function createEmployee(
   departmentId: string,
   input: Omit<Employee, "id">,
-): Employee {
-  const department = departments.find(
-    (item) => item.id === departmentId,
-  );
-
-  if (!department) {
-    throw new Error("Department not found.");
-  }
-
-  const employee: Employee = {
-    ...input,
-    id: Guid.create().toString(),
-  };
-
-  departments = departments.map((item) =>
-    item.id === departmentId
-      ? {
-          ...item,
-          employees: [...item.employees, employee],
-        }
-      : item,
-  );
-
-  return structuredClone(employee);
+) {
+  return prisma.employee.create({
+    data: { ...input, departmentId },
+  });
 }
